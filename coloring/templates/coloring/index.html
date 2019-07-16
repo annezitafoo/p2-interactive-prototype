@@ -2,202 +2,337 @@
 
 <!DOCTYPE html>
 <html>
+
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  	<title>P3 Coloring</title>
+	<title>P3 Coloring</title>
 
 	<script type="text/javascript" src="{% static 'coloring/vendors/jquery/jquery-3.3.1.min.js' %}"></script>
 	<script type="text/javascript" src="{% static 'coloring/vendors/paper/paper-full.min.js' %}"></script>
-  
-  <script src="{% static '/vendors/hammer/hammer.min.js' %}"></script>
-	<script src="{% static '/vendors/hammer/jquery.hammer.js' %}"></script>
+
+	<script type="text/javascript" src="{% static 'coloring/vendors/hammer/hammer.min.js' %}"></script>
+	<script type="text/javascript" src="{% static 'coloring/vendors/hammer/jquery.hammer.js' %}"></script>
 
 	<style type="text/css">
-    #menu {
-      background-color: #f1f1f1;
-      width: 310px;
-      height: 100%;
-      top: 0;
-      right: 0;
-      z-index: 2;
-      position: fixed;
-      padding: 5px;
-      display: flex;
-      flex-direction: column;
-    }
+		#menu {
+			background-color: #f1f1f1;
+			width: 310px;
+			height: 100%;
+			top: 0;
+			right: 0;
+			z-index: 2;
+			position: fixed;
+			padding: 5px;
+		}
+
 		canvas#colorPalette {
-      height: 500px;
-      width: 100%;
-      align-self: center
-    }
-/*     canvas#colorPalette[resize] {
-      height: 310px;
-      width: 310px;      
-    } */
-    .swatch {
-      width: 24px;
-      height: 24px;
-      -moz-border-radius: 12px;
-      -webkit-border-radius: 12px;
-      border-radius: 12px;
-      margin: 3px;
-    }
-    #myCanvas {
-      margin: auto;
-      border-style: solid;
-      border-width: 2px;
-      min-width: 750px;
-    }
-    #myCanvas[resize] {
-    }
-    button {
-      width: 100px;
-    }
+			height: 500px;
+			width: 100%;
+			align-self: center
+		}
+
+		canvas#myCanvas {
+			margin: auto;
+			border: 2px solid black;
+			padding: 2px;
+			height: 750px;
+			width: 750px;
+		}
+
+		button {
+			width: 100px;
+		}
 	</style>
 
 	<script type="text/javascript" canvas="canvas">
-    paper.install(window);
-    var myCanvas, colorPalette;
-    var toolCanvas, toolPalette;
-    var curColor = new Color({ hue: 0, saturation: 0.5, lightness: 0.5 });
-    var colConfirm = true;
+		paper.install(window);
+		var myCanvas, colorPalette;
+		var toolCanvas;
+		var h;
+		var curColor = new Color({
+			hue: 0,
+			saturation: 0.5,
+			lightness: 0.5
+		});
+		var colConfirm = true;
 
-    // color palette
-    var cp = {
-      history: [curColor], // black selected by default
-      options: [],
-    }
-    
-    window.onload = function() {
-      var mandala = {
-        item: null,
-        lastClicked: null,
-        filePath: '/static/coloring/images/mandala-freepik.svg'
-      };
-      
-      // coloring page
-      myCanvas = new PaperScope();
+		// color palette
+		var cp = {
+			history: [curColor], // black selected by default
+			options: [],
+		}
+		var toFill = null;
+
+		window.onload = function() {
+			var mandala = {
+				item: null,
+				lastClicked: null,
+				filePath: '/static/coloring/images/mandala-freepik.svg'
+			};
+
+			// coloring page
+			myCanvas = new PaperScope();
 			paper.setup('myCanvas');
-			toolCanvas = new Tool();
 
 			function myGradientInteraction() {
-				var rect = new Rectangle(new Point(0, 0), new Size(400, 300));
-				rect.center = paper.project.view.center;
-				var path = new Path.Rectangle(rect);
+				toolCanvas = new Tool();
 
-				path.fillColor = 'red';
-
-				var o;
-
-				toolCanvas.onMouseDown = function(event) {
-					o = event.point;
+				var vOrigin;
+				var path;
+				toolCanvas.minDistance = 5;
+				toolCanvas.onMouseDown = function(e) {
+					if (!colConfirm) cp.history.push(curColor), colConfirm = true;
+					path = new Path();
+					path.add(e.point);
 				}
 
-				toolCanvas.onMouseUp = function (event) {
-					var newFill = {
-						gradient: {
-							stops: [cp.history[cp.history.length - 2], cp.history[cp.history.length - 1]]
-						},
-						origin: o,
-						destination: event.point
+				toolCanvas.onMouseDrag = function(e) {
+					path.add(e.point);
+				}
+
+				toolCanvas.onMouseUp = function(e) {
+					if (path.length < 5) {
+						var hit = mandala.item.hitTest(path.segments[0].point, {
+							tolerance: 5,
+							fill: true
+						});
+						if (hit) hit.item.fillColor = cp.history[cp.history.length - 1];
 					}
-
-					path.fillColor = newFill;
+					else {
+						for (var i = 0; i < path.length / 5; i++) {
+							var hit = mandala.item.hitTest(path.getPointAt(i * 5), {
+								tolerance: 5,
+								fill: true
+							});
+							if (hit) {
+								hit.item.fillColor = {
+									gradient: {
+										stops: [cp.history[cp.history.length - 2], cp.history[cp.history.length - 1]]
+									},
+									origin: path.getPointAt(0),
+									destination: path.getPointAt(path.length)
+								};
+							}
+						}
+					}
 				}
 			}
-
+				
 			function myCustomInteraction() {
+				toolCanvas = new Tool();
+				
+				var recCol = new Group();
+				recCol.addChild(new Path.Rectangle({
+					point: [0, 0],
+					size: [106, 158],
+					strokeColor: 'black',
+					fillColor: '#e6e6e6',
+					shadowColor: '#000',
+					shadowBlur: 5,
+					shadowOffset: new Point(5, 5)
+				}));
 
-				toolCanvas.onMouseDown = function (event) {
-          var hit = mandala.item.hitTest(event.point, { tolerance: 10, fill: true });
-          if (hit) {
-              hit.item.fillColor = cp.history[cp.history.length - 1];
-          }
+				for (var x = 0; x < 2; x++) {
+					for (var y = 0; y < 3; y++) {
+						recCol.addChild(new Path.Circle({
+							center: [27 + x * 52, 27 + y * 51],
+							radius: 24,
+							strokeColor: 'black'
+						}));
+					}
 				}
+				recCol.visible = false;
+
+				h = new Hammer(document.getElementById("myCanvas"));
+				h.enable = true;
+				h.on('tap', function(e) {
+					if (recCol.visible) recCol.visible = false;
+					else {
+						if (!colConfirm) {
+							cp.history.push(curColor), colConfirm = true;
+						}
+						var p = new Point(e.changedPointers[0].layerX, e.changedPointers[0].layerY);
+						var hit = mandala.item.hitTest(p, {
+							tolerance: 1,
+							fill: true
+						});
+						if (hit) hit.item.fillColor = cp.history[cp.history.length - 1];
+					}
+				});
+
+				h.on('press', function(e) {
+					if (recCol.visible) recCol.visible = false;
+					else {
+						if (!colConfirm) {
+							cp.history.push(curColor), colConfirm = true;
+						}
+						var p = new Point(e.changedPointers[0].layerX, e.changedPointers[0].layerY);
+						toFill = mandala.item.hitTest(p, {
+							tolerance: 1,
+							fill: true
+						});
+						recCol.visible = true;
+						recCol.bringToFront();
+						recCol.position.x = p.x > paper.project.view.center.x ? p.x - recCol.bounds.width : p.x + recCol.bounds.width;
+						recCol.position.y = p.y > paper.project.view.center.y ? p.y - recCol.bounds.height : p.y + recCol.bounds.height;
+
+						for (var i = 1; i < recCol.children.length; i++) {
+							recCol.children[i].fillColor = {
+								hue: Math.random() * 360,
+								saturation: Math.random(),
+								lightness: Math.random()
+							};
+						}
+						h.enable = false;
+					}
+				});
+
+				toolCanvas.onMouseDown = function(e) {
+					if (recCol.visible == true) {
+						var hit = recCol.hitTestAll(e.point, {
+							tolerance: 1,
+							fill: true
+						});
+						if (hit && toFill) {
+							for (var i = 0; i < hit.length; i++) {
+								if (!hit[i].item.hasShadow()) {
+									toFill.item.fillColor = hit[i].item.fillColor;
+									curColor = hit[i].item.fillColor;
+									cp.history.push(hit[i].item.fillColor);
+									colorPalette.project._children[0].children["showCol"].fillColor = hit[i].item.fillColor;
+									var col = [hit[i].item.fillColor.hue, hit[i].item.fillColor.saturation, hit[i].item.fillColor.lightness];
+									colorPalette.project._children[0].children["slGrid"].fillColor.gradient.stops[0].color.hue = col[0];
+									colorPalette.project._children[0].children["slGrid"].fillColor.gradient.stops[1].color.hue = col[0];
+									colorPalette.project._children[0].children["colMarker"].strokeColor = {
+										hue: (col[0] + 180) % 360,
+										saturation: (col[1] + 0.5) % 1,
+										lightness: (col[2] + 0.5) % 1
+									};
+									colorPalette.project._children[0].children["colMarker"].position = new Point(col[1] * colorPalette.project._children[0].children["slGrid"].bounds.width + colorPalette.project._children[0].children["slGrid"].bounds.x, col[2] * colorPalette.project._children[0].children["slGrid"].bounds.height + colorPalette.project._children[0].children["slGrid"].bounds.y);
+								}
+							}
+						}
+						h.enable = true;
+						toFill = null;
+					}
+				};
 			}
-      
-      // To see your myGradientInteraction version visit: 
+
+			// To see your myGradientInteraction version visit: 
 			// http://<your url>:8000/coloring/?type=gradient
 			// To see your myCustomInteraction version visit: 
 			// http://<your url>:8000/coloring/
-      
-			paper.project.importSVG(mandala.filePath, function(item) {
-				mandala.item = item._children["design-freepik"];
-				mandala.item.bounds.size = new Size(paper.project.view.size.width - 4, paper.project.view.size.height - 4);
-				mandala.item.center = new Point(paper.project.view.center.x, paper.project.view.center.y);
 
+			paper.project.importSVG(mandala.filePath, function(item) {
+				item._children["design-freepik"].bounds.size = new Size([750, 750]);
+				item._children["design-freepik"].bounds.point = new Point([4, 4]);
+				
+				mandala.item = item._children["design-freepik"].clone();
 				paper.project.insertLayer(0, mandala.item);
+
 				if (window.location.href.indexOf("gradient") > -1) {
 					myGradientInteraction();
 				} else {
 					myCustomInteraction();
 				}
-			});     
-      
-//       paper.view.onResize = function(event) {
-//         myCanvas.position = paper.view.center;
-//       }
-      
-      ////////////////////////////////////////////////////
-      colorPalette = new PaperScope();
-      paper.setup('colorPalette');
-      
-      var pt = paper.view.size.width / 2;
-      var colorBar = new Path.Rectangle({
-        point: [2, 2],
-        size: [paper.project.view.size.width - 2, (paper.project.view.size.width - 2) * 0.1]
-      });
-      colorBar.fillColor = {
+			});
+
+			////////////////////////////////////////////////////
+			colorPalette = new PaperScope();
+			paper.setup('colorPalette');
+
+			var pt = paper.view.size.width / 2;
+			var colorBar = new Path.Rectangle({
+				point: [2, 2],
+				size: [paper.project.view.size.width - 2, (paper.project.view.size.width - 2) * 0.1]
+			});
+			colorBar.fillColor = {
 				gradient: {
-					stops: [['#bf4040'],
-									['#40bf40'],
-									['#4040bf'],
-									['#bf4040']]
+					stops: [
+						['#bf4040'],
+						['#40bf40'],
+						['#4040bf'],
+						['#bf4040']
+					]
 				},
 				origin: colorBar.bounds.leftCenter,
 				destination: colorBar.bounds.rightCenter
 			};
-      
+
 			var slGrid = new Path.Rectangle({
 				point: [colorBar.bounds.x, colorBar.bounds.bottom + 2],
 				size: [colorBar.bounds.width, colorBar.bounds.width],
 				strokeColor: 'black',
-				blendMode: 'overlay'
+				blendMode: 'overlay',
+				name: "slGrid"
 			});
 			slGrid.fillColor = {
 				gradient: {
-					stops: [[new Color({ hue: curColor.hue, saturation: 0, lightness: 0.5 })],
-									[new Color({ hue: curColor.hue, saturation: 1, lightness: 0.5 })]]
+					stops: [
+						[new Color({
+							hue: curColor.hue,
+							saturation: 0,
+							lightness: 0.5
+						})],
+						[new Color({
+							hue: curColor.hue,
+							saturation: 1,
+							lightness: 0.5
+						})]
+					]
 				},
 				origin: slGrid.bounds.leftCenter,
 				destination: slGrid.bounds.rightCenter
 			};
-			
+
 			var o = new Path.Rectangle(slGrid.point, slGrid.size);
 			o.fillColor = {
 				gradient: {
-					stops: [[new Color({ hue: curColor.hue, saturation: 0.5, lightness: 0 })],
-									[new Color({ hue: curColor.hue, saturation: 0.5, lightness: 1 })]]
+					stops: [
+						[new Color({
+							hue: curColor.hue,
+							saturation: 0.5,
+							lightness: 0
+						})],
+						[new Color({
+							hue: curColor.hue,
+							saturation: 0.5,
+							lightness: 1
+						})]
+					]
 				},
 				origin: o.bounds.topCenter,
 				destination: o.bounds.bottomCenter
 			};
 			o.insertBelow(slGrid);
-			
+
 			var showCol = new Path.Rectangle({
 				point: [colorBar.bounds.x, slGrid.bounds.bottom + 2],
 				size: [(colorBar.bounds.width - 2) / 2, (colorBar.bounds.width - 2) / 2],
 				strokeColor: 'black',
-				fillColor: curColor
+				fillColor: curColor,
+				name: "showCol"
 			});
-			
+
 			var tempCol = new Path.Rectangle({
 				point: [showCol.bounds.left, showCol.bounds.top],
 				size: [showCol.bounds.width, showCol.bounds.height / 2],
 				fillColor: curColor,
 				visible: false
 			});
-			
+
+			var colMarker = new Path.Circle({
+				center: [slGrid.bounds.centerX, slGrid.bounds.centerY],
+				radius: 4,
+				strokeWidth: 2,
+				strokeColor: {
+					hue: (curColor.hue + 180) % 360,
+					saturation: (curColor.saturation + 0.5) % 1,
+					lightness: (curColor.lightness + 0.5) % 1
+				},
+				name: "colMarker"
+			});
+
 			colorBar.onMouseEnter = function(e) {
 				tempCol.visible = true;
 				tempCol.fillColor = {
@@ -225,13 +360,19 @@
 					saturation: 0.5,
 					lightness: 0.5
 				};
+				colMarker.strokeColor = {
+					hue: (curColor.hue + 180) % 360,
+					saturation: (curColor.saturation + 0.5) % 1,
+					lightness: (curColor.lightness + 0.5) % 1
+				};
+				colMarker.position = slGrid.bounds.center;
 				colConfirm = false;
 				showCol.fillColor = curColor;
 				tempCol.visible = false;
 				slGrid.fillColor.gradient.stops[0].color.hue = curColor.hue;
 				slGrid.fillColor.gradient.stops[1].color.hue = curColor.hue;
 			};
-			
+
 			slGrid.onMouseEnter = function(e) {
 				tempCol.visible = true;
 				tempCol.fillColor.hue = curColor.hue;
@@ -255,122 +396,44 @@
 			slGrid.onMouseUp = function(e) {
 				curColor.saturation = (e.point.x - slGrid.bounds.x) / slGrid.bounds.width;
 				curColor.lightness = (e.point.y - slGrid.bounds.y) / slGrid.bounds.height;
-
+				colMarker.strokeColor = {
+					hue: (curColor.hue + 180) % 360,
+					saturation: (curColor.saturation + 0.5) % 1,
+					lightness: (curColor.lightness + 0.5) % 1
+				};
+				colMarker.position = e.point;
 				colConfirm = false;
 				showCol.fillColor = curColor;
 				tempCol.visible = false;
 			};
-      
-      
-//       colorBar.onM
-      
-//       var colorWheel = new Path.Circle({        
-//         center: [pt, pt],
-//         radius: pt - 5,
-//         strokeWidth: 10,
-//         closed: false
-//       });
-//       colorWheel.removeSegment(3);
-//       colorWheel.strokeColor = {
-//         gradient: {
-//           stops: [['#bf8040', 0], 
-//                   ['#bfbf40', (2 - Math.sqrt(3)) / 4], 
-//                   ['#80bf40', 0.25], 
-//                   ['#40bf40', 0.5], 
-//                   ['#40bf80', 0.75], 
-//                   ['#40bfbf', (2 + Math.sqrt(3)) / 4], 
-//                   ['#407fbf', 1]]
-//         }, origin: new Point(0, pt), destination: new Point(2 * pt, pt)        
-//       };
-//       var colorWheel1 = new Path.Circle({        
-//         center: [pt, pt],
-//         radius: pt - 5,
-//         strokeWidth: 10,
-//         closed: false,
-//         rotation: 180
-//       });
-//       colorWheel1.removeSegment(3);
-//       colorWheel1.strokeColor = {
-//         gradient: {
-//           stops: [['#bf8040', 0], 
-//                   ['#bf4040', (2 - Math.sqrt(3)) / 4], 
-//                   ['#bf4080', 0.25], 
-//                   ['#bf40bf', 0.5], 
-//                   ['#7f40bf', 0.75], 
-//                   ['#4040bf', (2 + Math.sqrt(3)) / 4], 
-//                   ['#407fbf', 1]]
-//         }, origin: new Point(0, pt), destination: new Point(2 * pt, pt)        
-//       };
-//       colorWheel.join(colorWheel1);
-//       colorWheel.closed = false;
-//       var c = Math.sqrt(3) / 2;
-//       var s = 0.5;
-//       var p11 = new Point(pt - c, pt - s); //p11.x / pt / pt
-//       var p12 = new Point(p11.x, pt + s);
-//       var p21 = new Point(pt - s, pt - c);
-//       var p22 = new Point(p21.x, pt + c);
-//       var p31 = new Point(pt, 0);
-//       var p32 = new Point(pt, 2 * pt);
-//       var p41 = new Point(pt + s, p21.y);
-//       var p42 = new Point(p41.x, p22.y);
-//       var p51 = new Point(pt + c, p11.y);
-//       var p52 = new Point(p51.x, p12.y);
-//       colorWheel.strokeColor = {
-//         gradient: {
-//           stops: [["#bf8040", 0],
-//                   [ "#bfbf40", [p11.x / pt / pt]],
-//                   [ "#80bf40", [p21.x / pt / pt]],
-//                   [ "#40bf40", 0.5],
-//                   [ "#40bf80", [p41.x / pt / pt]],
-//                   [ "#40bfbf", [p51.x / pt / pt]],
-//                   ["#407fbf", 1]]
-//         }, origin: new Point(0, pt), destination: new Point(2 * pt, pt) };
-//       colorWheel.fillColor.gradient.stops[1].color = { gradient: { stops: [["#bfbf40"], ["#bf4040"]] }, origin: p11, destination: p12 };
-//       colorWheel.fillColor.gradient.stops[2].color = { gradient: { stops: [["#80bf40"], ["#bf4080"]] }, origin: p21, destination: p22 };
-//       colorWheel.fillColor.gradient.stops[3].color = { gradient: { stops: [["#40bf40"], ["#bf40bf"]] }, origin: p31, destination: p32 };
-//       colorWheel.fillColor.gradient.stops[4].color = { gradient: { stops: [["#40bf80"], ["#7f40bf"]] }, origin: p41, destination: p42 };
-//       colorWheel.fillColor.gradient.stops[5].color = { gradient: { stops: [["#40bfbf"], ["#4040bf"]] }, origin: p51, destination: p52 };
-      
-			// create a color palette with the given colors
-			function createColorPalette(colors){
-
-				// create a swatch for each color
-				for (var i = colors.length - 1; i >= 0; i--) {
-					var $swatch = $("<div>").css("background-color", colors[i])
-									   .addClass("swatch");
-					$swatch.click(function(){
-						// add color to the color palette history
-					  	cp.history.push($(this).css("background-color"));
-					});
-					cp.$container.append($swatch);
-				}
-			}
-
-			// loads a set of colors from a json to create a color palette
-			function getColorsCreatePalette(){
-				cp.$container.html(" ");
-				$.getJSON('/static/coloring/vendors/material/material-colors.json', function(colors){
-					var keys = Object.keys(colors);
-					for (var i = keys.length - 1; i >= 0; i--) {
-						cp.options.push(colors[keys[i]][500]);
-					}
-					createColorPalette(cp.options);
-				});
-			}
-
 			
+			document.getElementById("nButton").onclick = function() {
+				toolCanvas.remove();
+				myCustomInteraction();
+			};
+			document.getElementById("gButton").onclick = function() {
+				toolCanvas.remove();
+				h.destroy();
+				myGradientInteraction();
+			};
 		}
 	</script>
 </head>
+
 <body>
-	<canvas id="myCanvas" height="750px" width="750px"></canvas>
-  <div id="menu">
-    <canvas id="colorPalette" resize="false"></canvas>
-    <div style="display: flex; justify-content: space-evenly; margin: 10px">
-      <button>fill</button>
-      <button>draw</button>   
-    </div>
-  </div>
+	<canvas id="myCanvas"></canvas>
+	<div id="menu">
+		<canvas id="colorPalette" resize="false"></canvas>
+		<div style="display: flex; justify-content: space-evenly; margin: 10px">
+			<button id='nButton'>Normal</button>
+			<button id='gButton'>Gradient</button>
+		</div>
+	</div>
+	
+	<script>
+		
+</script>
 	
 </body>
+
 </html>
